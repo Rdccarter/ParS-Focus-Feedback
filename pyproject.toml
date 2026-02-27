@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "focus-feedback"
+version = "0.1.0"
+description = "Real-time astigmatic autofocus control for live microscopy"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "hilo" }
+]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+ui = [
+  "pyqtgraph>=0.13",
+  "PyQt5>=5.15",
+]
+camera = [
+  "pylablib>=1.4",
+]
+
+[project.scripts]
+focus-feedback = "auto_focus.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.setuptools.package-data]
+"auto_focus" = ["py.typed"]
