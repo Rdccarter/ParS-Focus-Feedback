@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 
 Slot = getattr(QtCore, "Slot", QtCore.pyqtSlot)
@@ -31,6 +31,26 @@ from .calibration import (
 from .focus_metric import Roi, astigmatic_error_signal, extract_roi, fit_gaussian_psf, roi_total_intensity
 from .interfaces import CameraFrame, CameraInterface, StageInterface
 from .ui_signals import AutofocusSignals
+
+
+UI_THEME = {
+    "bg": "#16181c",
+    "bg_alt": "#1d2025",
+    "panel": "#262a31",
+    "panel_alt": "#2d3139",
+    "panel_edge": "#3d434d",
+    "text": "#edf1f5",
+    "muted": "#9fa8b3",
+    "focus": "#4ecdc4",
+    "focus_bright": "#86fff6",
+    "warn": "#f0b35a",
+    "fault": "#ef6f6c",
+    "ok": "#6bcf8a",
+    "cyan": "#6ec5ff",
+    "magenta": "#ff7ad9",
+    "yellow": "#ffd369",
+    "dim": "#65707d",
+}
 
 
 class LatestFrameQueue:
@@ -328,150 +348,570 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
         self._connect_signals()
         self._load_settings()
 
+    def _apply_theme(self) -> None:
+        self.setStyleSheet(
+            f"""
+            QMainWindow, QWidget {{
+                background: {UI_THEME['bg']};
+                color: {UI_THEME['text']};
+                font-family: "Avenir Next", "Segoe UI", sans-serif;
+                font-size: 12px;
+            }}
+            QFrame#Card {{
+                background: {UI_THEME['panel']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 14px;
+            }}
+            QFrame#CardAlt {{
+                background: {UI_THEME['panel_alt']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 14px;
+            }}
+            QLabel#CardTitle {{
+                font-size: 15px;
+                font-weight: 700;
+                color: {UI_THEME['text']};
+            }}
+            QLabel#CardSubtitle {{
+                font-size: 11px;
+                color: {UI_THEME['muted']};
+            }}
+            QLabel#MetricLabel {{
+                color: {UI_THEME['muted']};
+                font-size: 11px;
+                letter-spacing: 0.6px;
+            }}
+            QLabel#MetricValue {{
+                color: {UI_THEME['text']};
+                font-size: 24px;
+                font-weight: 700;
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            }}
+            QLabel#MetricMeta {{
+                color: {UI_THEME['muted']};
+                font-size: 11px;
+            }}
+            QLabel#StateTitle {{
+                font-size: 12px;
+                color: {UI_THEME['muted']};
+                letter-spacing: 0.8px;
+            }}
+            QLabel#StateValue {{
+                font-size: 30px;
+                font-weight: 800;
+                color: {UI_THEME['text']};
+            }}
+            QLabel#StateDetail {{
+                font-size: 12px;
+                color: {UI_THEME['text']};
+            }}
+            QPushButton {{
+                background: {UI_THEME['panel_alt']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 10px;
+                padding: 8px 12px;
+                color: {UI_THEME['text']};
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                border-color: {UI_THEME['focus']};
+            }}
+            QPushButton#PrimaryButton {{
+                background: {UI_THEME['focus']};
+                color: {UI_THEME['bg']};
+                border-color: {UI_THEME['focus']};
+                font-size: 14px;
+                font-weight: 800;
+                min-height: 34px;
+            }}
+            QPushButton#DangerButton {{
+                background: {UI_THEME['fault']};
+                color: white;
+                border-color: {UI_THEME['fault']};
+                font-size: 14px;
+                font-weight: 800;
+                min-height: 34px;
+            }}
+            QPushButton#WarnButton {{
+                background: {UI_THEME['warn']};
+                color: {UI_THEME['bg']};
+                border-color: {UI_THEME['warn']};
+                font-weight: 700;
+            }}
+            QCheckBox, QLabel, QSpinBox, QDoubleSpinBox, QComboBox {{
+                color: {UI_THEME['text']};
+            }}
+            QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QTextEdit {{
+                background: {UI_THEME['bg_alt']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 8px;
+                padding: 5px 8px;
+            }}
+            QToolBox::tab {{
+                background: {UI_THEME['panel_alt']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 8px;
+                color: {UI_THEME['text']};
+                padding: 8px 12px;
+                font-weight: 700;
+            }}
+            QToolBox::tab:selected {{
+                background: {UI_THEME['focus']};
+                color: {UI_THEME['bg']};
+            }}
+            QProgressBar {{
+                background: {UI_THEME['bg_alt']};
+                border: 1px solid {UI_THEME['panel_edge']};
+                border-radius: 8px;
+                text-align: center;
+                color: {UI_THEME['text']};
+            }}
+            QProgressBar::chunk {{
+                background: {UI_THEME['focus']};
+                border-radius: 7px;
+            }}
+            QListWidget {{
+                outline: none;
+            }}
+            """
+        )
+
+    def _make_card(self, title: str, subtitle: str = "", *, alt: bool = False) -> tuple[QtWidgets.QFrame, QtWidgets.QVBoxLayout]:
+        frame = QtWidgets.QFrame()
+        frame.setObjectName("CardAlt" if alt else "Card")
+        layout = QtWidgets.QVBoxLayout(frame)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        head = QtWidgets.QLabel(title)
+        head.setObjectName("CardTitle")
+        layout.addWidget(head)
+        if subtitle:
+            sub = QtWidgets.QLabel(subtitle)
+            sub.setObjectName("CardSubtitle")
+            sub.setWordWrap(True)
+            layout.addWidget(sub)
+        return frame, layout
+
+    def _make_metric_tile(self, label: str, value: str = "--", meta: str = "") -> tuple[QtWidgets.QFrame, QtWidgets.QLabel, QtWidgets.QLabel]:
+        frame = QtWidgets.QFrame()
+        frame.setObjectName("CardAlt")
+        layout = QtWidgets.QVBoxLayout(frame)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(2)
+        lbl = QtWidgets.QLabel(label.upper())
+        lbl.setObjectName("MetricLabel")
+        val = QtWidgets.QLabel(value)
+        val.setObjectName("MetricValue")
+        meta_lbl = QtWidgets.QLabel(meta)
+        meta_lbl.setObjectName("MetricMeta")
+        meta_lbl.setWordWrap(True)
+        layout.addWidget(lbl)
+        layout.addWidget(val)
+        layout.addWidget(meta_lbl)
+        return frame, val, meta_lbl
+
+    def _style_plot(self, plot: pg.PlotWidget, *, x_label: str = "", y_label: str = "") -> None:
+        plot.setBackground(UI_THEME["bg_alt"])
+        item = plot.getPlotItem()
+        item.showGrid(x=True, y=True, alpha=0.16)
+        item.getAxis("left").setPen(pg.mkPen(UI_THEME["dim"]))
+        item.getAxis("bottom").setPen(pg.mkPen(UI_THEME["dim"]))
+        item.getAxis("left").setTextPen(pg.mkPen(UI_THEME["muted"]))
+        item.getAxis("bottom").setTextPen(pg.mkPen(UI_THEME["muted"]))
+        if x_label:
+            item.setLabel("bottom", x_label, color=UI_THEME["muted"])
+        if y_label:
+            item.setLabel("left", y_label, color=UI_THEME["muted"])
+        item.layout.setContentsMargins(12, 12, 12, 12)
+
+    def _add_plot_legend(self, plot: pg.PlotWidget) -> Any:
+        item = plot.getPlotItem()
+        try:
+            legend = item.addLegend(
+                offset=(10, 10),
+                brush=pg.mkBrush(22, 24, 28, 220),
+                pen=pg.mkPen(UI_THEME["panel_edge"]),
+                labelTextColor=UI_THEME["text"],
+            )
+        except TypeError:
+            legend = item.addLegend(offset=(10, 10))
+            for method_name, arg in [
+                ("setBrush", pg.mkBrush(22, 24, 28, 220)),
+                ("setPen", pg.mkPen(UI_THEME["panel_edge"])),
+            ]:
+                method = getattr(legend, method_name, None)
+                if callable(method):
+                    try:
+                        method(arg)
+                    except Exception:
+                        pass
+        return legend
+
+    def _push_event(self, message: str, *, level: str = "info") -> None:
+        stamp = time.strftime("%H:%M:%S", time.localtime())
+        text = f"{stamp}  {message}"
+        if text == getattr(self, "_last_event_text", None):
+            return
+        self._last_event_text = text
+        if not hasattr(self, "_events"):
+            return
+        item = QtWidgets.QListWidgetItem(text)
+        color = {
+            "info": UI_THEME["muted"],
+            "state": UI_THEME["text"],
+            "warn": UI_THEME["warn"],
+            "fault": UI_THEME["fault"],
+        }.get(level, UI_THEME["muted"])
+        item.setForeground(QtGui.QColor(color))
+        self._events.insertItem(0, item)
+        while self._events.count() > 80:
+            self._events.takeItem(self._events.count() - 1)
+
+    def _set_state_card(self, state: str, detail: str = "") -> None:
+        palette = {
+            AutofocusState.IDLE.value: ("#39424d", UI_THEME["muted"]),
+            AutofocusState.CALIBRATED_READY.value: ("#1d4366", UI_THEME["cyan"]),
+            AutofocusState.LOCKING.value: ("#244a45", UI_THEME["focus_bright"]),
+            AutofocusState.LOCKED.value: ("#1e4d36", UI_THEME["ok"]),
+            AutofocusState.DEGRADED.value: ("#5b4a20", UI_THEME["warn"]),
+            AutofocusState.RECOVERY.value: ("#6a3f14", UI_THEME["warn"]),
+            AutofocusState.LOST.value: ("#4d2d5d", "#d5a6ff"),
+            AutofocusState.FAULT.value: ("#5e2827", UI_THEME["fault"]),
+        }
+        bg, accent = palette.get(state, (UI_THEME["panel"], UI_THEME["text"]))
+        self._state_card.setStyleSheet(
+            f"QFrame#{self._state_card.objectName()} {{"
+            f"background:{bg}; border:1px solid {accent}; border-radius:18px; }}"
+        )
+        self._state_badge.setText(state)
+        self._state_badge.setStyleSheet(
+            f"color:{accent}; font-size:30px; font-weight:800;"
+        )
+        self._state_detail.setText(detail or "System ready for lock.")
+
+
     def _build_ui(self) -> None:
+        self._apply_theme()
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         layout = QtWidgets.QVBoxLayout(central)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
-        top = QtWidgets.QHBoxLayout()
-        layout.addLayout(top)
+        master = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        master.setChildrenCollapsible(False)
+        layout.addWidget(master)
 
+        top = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        top.setChildrenCollapsible(False)
+        master.addWidget(top)
+
+        bottom = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        bottom.setChildrenCollapsible(False)
+        master.addWidget(bottom)
+        master.setStretchFactor(0, 6)
+        master.setStretchFactor(1, 4)
+
+        left_card, left_layout = self._make_card(
+            "Live Image",
+            "Track a single bright spot. The ROI may move in XY, but only the Z stage is driven.",
+        )
         self._graphics = pg.GraphicsLayoutWidget()
+        self._graphics.setBackground(UI_THEME["bg_alt"])
         self._view = self._graphics.addViewBox(lockAspect=True)
         self._img = pg.ImageItem()
         self._view.addItem(self._img)
-        self._roi = pg.RectROI([self._config.roi.x, self._config.roi.y], [self._config.roi.width, self._config.roi.height], pen=pg.mkPen('c', width=2))
+        self._view.invertY(True)
+        self._roi = pg.RectROI(
+            [self._config.roi.x, self._config.roi.y],
+            [self._config.roi.width, self._config.roi.height],
+            pen=pg.mkPen(UI_THEME["focus"], width=2),
+        )
         self._view.addItem(self._roi)
+        self._centroid_marker = pg.ScatterPlotItem(size=11, pen=pg.mkPen(UI_THEME["focus_bright"], width=2), brush=pg.mkBrush(255, 255, 255, 40))
+        self._view.addItem(self._centroid_marker)
+        self._trail_curve = pg.PlotCurveItem(pen=pg.mkPen((110, 197, 255, 110), width=2))
+        self._view.addItem(self._trail_curve)
+        self._overlay_info = pg.TextItem(anchor=(0, 0), fill=pg.mkBrush(22, 24, 28, 220), border=pg.mkPen(UI_THEME["panel_edge"]))
+        self._overlay_legend = pg.TextItem(anchor=(1, 0), fill=pg.mkBrush(22, 24, 28, 210), border=pg.mkPen(UI_THEME["panel_edge"]))
+        self._view.addItem(self._overlay_info)
+        self._view.addItem(self._overlay_legend)
         self._hist = pg.HistogramLUTWidget()
         self._hist.setImageItem(self._img)
-        self._state_badge = QtWidgets.QLabel("CALIBRATED_READY")
-        self._state_badge.setStyleSheet("background:#444;color:white;padding:4px;font-weight:bold;")
-
-        left_panel = QtWidgets.QVBoxLayout()
-        left_panel.addWidget(self._state_badge)
         image_row = QtWidgets.QHBoxLayout()
-        image_row.addWidget(self._graphics, 4)
-        image_row.addWidget(self._hist, 1)
-        left_panel.addLayout(image_row)
-        top.addLayout(left_panel, 3)
+        image_row.setSpacing(10)
+        image_row.addWidget(self._graphics, 7)
+        image_row.addWidget(self._hist, 2)
+        left_layout.addLayout(image_row)
 
-        controls = QtWidgets.QVBoxLayout()
+        image_toolbar = QtWidgets.QHBoxLayout()
+        self._show_trail = QtWidgets.QCheckBox("Show track trail")
+        self._show_trail.setChecked(True)
+        self._show_centroid = QtWidgets.QCheckBox("Show centroid")
+        self._show_centroid.setChecked(True)
+        image_toolbar.addWidget(self._show_trail)
+        image_toolbar.addWidget(self._show_centroid)
+        image_toolbar.addStretch(1)
+        left_layout.addLayout(image_toolbar)
+        top.addWidget(left_card)
+
+        right_scroll = QtWidgets.QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        right_body = QtWidgets.QWidget()
+        right_layout = QtWidgets.QVBoxLayout(right_body)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+
+        self._state_card = QtWidgets.QFrame()
+        self._state_card.setObjectName("StateCard")
+        state_layout = QtWidgets.QVBoxLayout(self._state_card)
+        state_layout.setContentsMargins(16, 16, 16, 16)
+        state_layout.setSpacing(8)
+        state_title = QtWidgets.QLabel("AUTOFOCUS STATE")
+        state_title.setObjectName("StateTitle")
+        self._state_badge = QtWidgets.QLabel("CALIBRATED_READY")
+        self._state_badge.setObjectName("StateValue")
+        self._state_detail = QtWidgets.QLabel("Calibration loaded. Ready to acquire lock.")
+        self._state_detail.setObjectName("StateDetail")
+        self._state_detail.setWordWrap(True)
         self._status = QtWidgets.QLabel("Ready")
-        self._z_lbl = QtWidgets.QLabel("Z: --")
-        self._corr_lbl = QtWidgets.QLabel("Last correction: --")
-        self._lat_lbl = QtWidgets.QLabel("Loop latency: --")
-        self._conf_lbl = QtWidgets.QLabel("Confidence: --")
-        self._domain_lbl = QtWidgets.QLabel("Domain margin: --")
-        self._health_lbl = QtWidgets.QLabel("Control health: --")
-        self._drop_lbl = QtWidgets.QLabel("Frames dropped: 0")
-        for w in [self._status, self._z_lbl, self._corr_lbl, self._lat_lbl, self._conf_lbl, self._domain_lbl, self._health_lbl, self._drop_lbl]:
-            controls.addWidget(w)
+        self._status.setObjectName("CardSubtitle")
+        self._status.setWordWrap(True)
+        self._lock_quality = QtWidgets.QProgressBar()
+        self._lock_quality.setRange(0, 100)
+        self._lock_quality.setValue(0)
+        self._lock_quality_lbl = QtWidgets.QLabel("Lock quality 0%")
+        self._lock_quality_lbl.setObjectName("CardSubtitle")
+        state_layout.addWidget(state_title)
+        state_layout.addWidget(self._state_badge)
+        state_layout.addWidget(self._state_detail)
+        state_layout.addWidget(self._lock_quality)
+        state_layout.addWidget(self._lock_quality_lbl)
+        state_layout.addWidget(self._status)
+        right_layout.addWidget(self._state_card)
 
+        metrics_wrap, metrics_layout = self._make_card("Live Metrics", "Critical values stay visible while tuning.")
+        metric_grid = QtWidgets.QGridLayout()
+        metric_grid.setHorizontalSpacing(10)
+        metric_grid.setVerticalSpacing(10)
+        z_tile, self._z_val, self._z_meta = self._make_metric_tile("Current Z", "--", "stage command")
+        err_tile, self._err_val, self._err_meta = self._make_metric_tile("Error", "--", "focus error")
+        corr_tile, self._corr_val, self._corr_meta = self._make_metric_tile("Correction", "--", "last command step")
+        conf_tile, self._conf_val, self._conf_meta = self._make_metric_tile("Confidence", "--", "detection pass")
+        domain_tile, self._domain_val, self._domain_meta = self._make_metric_tile("Domain Margin", "--", "negative means outside")
+        lag_tile, self._lag_val, self._lag_meta = self._make_metric_tile("Stage / Frames", "--", "lag and dropped")
+        metric_grid.addWidget(z_tile, 0, 0)
+        metric_grid.addWidget(err_tile, 0, 1)
+        metric_grid.addWidget(corr_tile, 1, 0)
+        metric_grid.addWidget(conf_tile, 1, 1)
+        metric_grid.addWidget(domain_tile, 2, 0)
+        metric_grid.addWidget(lag_tile, 2, 1)
+        metrics_layout.addLayout(metric_grid)
+        right_layout.addWidget(metrics_wrap)
+
+        self._sections = QtWidgets.QToolBox()
+        right_layout.addWidget(self._sections)
+
+        af_page = QtWidgets.QWidget()
+        af_layout = QtWidgets.QVBoxLayout(af_page)
+        af_layout.setContentsMargins(10, 10, 10, 10)
+        af_layout.setSpacing(10)
+        action_row = QtWidgets.QHBoxLayout()
         self._start_btn = QtWidgets.QPushButton("Start Autofocus")
-        self._stop_btn = QtWidgets.QPushButton("Stop Autofocus")
-        self._home_btn = QtWidgets.QPushButton("Home Stage to Centre")
+        self._start_btn.setObjectName("PrimaryButton")
+        self._stop_btn = QtWidgets.QPushButton("Stop")
+        self._stop_btn.setObjectName("DangerButton")
+        action_row.addWidget(self._start_btn)
+        action_row.addWidget(self._stop_btn)
+        af_layout.addLayout(action_row)
+        self._lock_setpoint = QtWidgets.QCheckBox("Lock current focus setpoint on engage")
+        self._lock_setpoint.setChecked(True)
+        af_layout.addWidget(self._lock_setpoint)
+        self._kp = QtWidgets.QDoubleSpinBox(); self._kp.setRange(0.0, 20.0); self._kp.setDecimals(3); self._kp.setValue(self._config.kp); self._kp.setPrefix("Kp  ")
+        self._ki = QtWidgets.QDoubleSpinBox(); self._ki.setRange(0.0, 20.0); self._ki.setDecimals(3); self._ki.setValue(self._config.ki); self._ki.setPrefix("Ki  ")
+        self._kd = QtWidgets.QDoubleSpinBox(); self._kd.setRange(0.0, 20.0); self._kd.setDecimals(3); self._kd.setValue(self._config.kd); self._kd.setPrefix("Kd  ")
+        self._max_step = QtWidgets.QDoubleSpinBox(); self._max_step.setRange(0.001, 20.0); self._max_step.setDecimals(3); self._max_step.setValue(self._config.max_step_um); self._max_step.setPrefix("Max step (um)  ")
+        self._deadband = QtWidgets.QDoubleSpinBox(); self._deadband.setRange(0.0, 1.0); self._deadband.setDecimals(4); self._deadband.setValue(self._config.command_deadband_um); self._deadband.setPrefix("Deadband (um)  ")
+        self._max_speed = QtWidgets.QDoubleSpinBox(); self._max_speed.setRange(0.0, 500.0); self._max_speed.setDecimals(3); self._max_speed.setValue(self._config.max_slew_rate_um_per_s or 0.0); self._max_speed.setPrefix("Max slew (um/s)  ")
+        for w in [self._kp, self._ki, self._kd, self._max_step, self._deadband, self._max_speed]:
+            af_layout.addWidget(w)
+        af_layout.addStretch(1)
+        self._sections.addItem(af_page, "Autofocus")
+
+        cal_page = QtWidgets.QWidget()
+        cal_layout = QtWidgets.QVBoxLayout(cal_page)
+        cal_layout.setContentsMargins(10, 10, 10, 10)
+        cal_layout.setSpacing(10)
+        self._cal_btn = QtWidgets.QPushButton("Calibrate")
+        self._cal_btn.setObjectName("PrimaryButton")
+        self._cal_progress = QtWidgets.QLabel("Calibration idle")
+        self._cal_progress.setObjectName("CardSubtitle")
+        self._cal_half_range = QtWidgets.QDoubleSpinBox(); self._cal_half_range.setRange(0.05, 100.0); self._cal_half_range.setDecimals(3); self._cal_half_range.setValue(self._calibration_half_range_um); self._cal_half_range.setPrefix("Half-range (um)  ")
+        self._cal_steps = QtWidgets.QSpinBox(); self._cal_steps.setRange(5, 1001); self._cal_steps.setSingleStep(2); self._cal_steps.setValue(self._calibration_steps); self._cal_steps.setPrefix("Steps  ")
+        cal_layout.addWidget(self._cal_btn)
+        cal_layout.addWidget(self._cal_progress)
+        cal_layout.addWidget(self._cal_half_range)
+        cal_layout.addWidget(self._cal_steps)
+        cal_layout.addStretch(1)
+        self._sections.addItem(cal_page, "Calibration")
+
+        track_page = QtWidgets.QWidget()
+        track_layout = QtWidgets.QVBoxLayout(track_page)
+        track_layout.setContentsMargins(10, 10, 10, 10)
+        track_layout.setSpacing(10)
+        self._track_roi_xy = QtWidgets.QCheckBox("Move ROI to follow the spot in XY")
+        self._track_roi_xy.setChecked(bool(self._config.track_roi))
+        self._track_gain = QtWidgets.QDoubleSpinBox(); self._track_gain.setRange(0.0, 1.0); self._track_gain.setSingleStep(0.05); self._track_gain.setValue(float(self._config.track_gain)); self._track_gain.setPrefix("Track gain  ")
+        self._track_deadband_px = QtWidgets.QDoubleSpinBox(); self._track_deadband_px.setRange(0.0, 50.0); self._track_deadband_px.setDecimals(2); self._track_deadband_px.setValue(float(self._config.track_deadband_px)); self._track_deadband_px.setPrefix("Deadband (px)  ")
+        self._track_max_step_px = QtWidgets.QDoubleSpinBox(); self._track_max_step_px.setRange(0.5, 100.0); self._track_max_step_px.setDecimals(2); self._track_max_step_px.setValue(float(self._config.track_max_shift_px)); self._track_max_step_px.setPrefix("Max shift (px/frame)  ")
+        trail_note = QtWidgets.QLabel("Display trail and centroid toggles live above the image.")
+        trail_note.setObjectName("CardSubtitle")
+        trail_note.setWordWrap(True)
+        for w in [self._track_roi_xy, self._track_gain, self._track_deadband_px, self._track_max_step_px, trail_note]:
+            track_layout.addWidget(w)
+        track_layout.addStretch(1)
+        self._sections.addItem(track_page, "ROI Tracking")
+
+        safety_page = QtWidgets.QWidget()
+        safety_layout = QtWidgets.QVBoxLayout(safety_page)
+        safety_layout.setContentsMargins(10, 10, 10, 10)
+        safety_layout.setSpacing(10)
+        self._home_btn = QtWidgets.QPushButton("Home Stage To Centre")
+        self._home_btn.setObjectName("WarnButton")
         self._home_btn.setToolTip(
             "Move stage to the midpoint of its travel range.\n"
-            "Use after a power cycle or re-home to ensure the stage has\n"
-            "headroom in both directions before sweeping.\n"
-            "The calibration model stores offsets relative to focus, so\n"
-            "re-homing alone does not invalidate an existing calibration.\n"
-            "Re-run Calibrate only if the sample has physically moved."
+            "Use after a power cycle or re-home to restore sweep headroom.\n"
+            "Recalibrate only if the sample itself has moved."
         )
-        self._cal_btn = QtWidgets.QPushButton("Calibrate")
-        self._cal_progress = QtWidgets.QLabel("Calibration: idle")
-        self._lock_setpoint = QtWidgets.QCheckBox("Lock setpoint")
-        self._lock_setpoint.setChecked(True)
-        for w in [self._start_btn, self._stop_btn, self._home_btn, self._cal_btn, self._cal_progress, self._lock_setpoint]:
-            controls.addWidget(w)
+        safety_note = QtWidgets.QLabel("Use with care. This recentres stage travel but does not move the ROI or retune the calibration.")
+        safety_note.setObjectName("CardSubtitle")
+        safety_note.setWordWrap(True)
+        safety_layout.addWidget(self._home_btn)
+        safety_layout.addWidget(safety_note)
+        safety_layout.addStretch(1)
+        self._sections.addItem(safety_page, "Safety")
 
-        self._cal_half_range = QtWidgets.QDoubleSpinBox(); self._cal_half_range.setRange(0.05, 100.0); self._cal_half_range.setDecimals(3); self._cal_half_range.setValue(self._calibration_half_range_um); self._cal_half_range.setPrefix("Cal half-range ")
-        self._cal_steps = QtWidgets.QSpinBox(); self._cal_steps.setRange(5, 1001); self._cal_steps.setSingleStep(2); self._cal_steps.setValue(self._calibration_steps); self._cal_steps.setPrefix("Cal steps ")
-        controls.addWidget(self._cal_half_range)
-        controls.addWidget(self._cal_steps)
+        detect_page = QtWidgets.QWidget()
+        detect_layout = QtWidgets.QVBoxLayout(detect_page)
+        detect_layout.setContentsMargins(10, 10, 10, 10)
+        detect_layout.setSpacing(10)
+        self._detection_window = QtWidgets.QSpinBox(); self._detection_window.setRange(3, 30); self._detection_window.setValue(int(self._config.detection_window_size)); self._detection_window.setPrefix("Window  ")
+        self._detection_threshold = QtWidgets.QDoubleSpinBox(); self._detection_threshold.setRange(0.1, 1.0); self._detection_threshold.setSingleStep(0.05); self._detection_threshold.setValue(float(self._config.detection_pass_threshold)); self._detection_threshold.setPrefix("Pass threshold  ")
+        self._use_gaussian = QtWidgets.QCheckBox("Use per-frame Gaussian fit")
+        self._use_gaussian.setChecked(bool(self._config.use_gaussian_fit))
+        for w in [self._detection_window, self._detection_threshold, self._use_gaussian]:
+            detect_layout.addWidget(w)
+        detect_layout.addStretch(1)
+        self._sections.addItem(detect_page, "Detection")
 
-        self._kp = QtWidgets.QDoubleSpinBox(); self._kp.setValue(self._config.kp); self._kp.setPrefix("Kp ")
-        self._ki = QtWidgets.QDoubleSpinBox(); self._ki.setValue(self._config.ki); self._ki.setPrefix("Ki ")
-        self._kd = QtWidgets.QDoubleSpinBox(); self._kd.setValue(self._config.kd); self._kd.setPrefix("Kd ")
-        self._max_speed = QtWidgets.QDoubleSpinBox(); self._max_speed.setValue(self._config.max_slew_rate_um_per_s or 0.0); self._max_speed.setPrefix("Max speed ")
-        self._max_step = QtWidgets.QDoubleSpinBox(); self._max_step.setValue(self._config.max_step_um); self._max_step.setPrefix("Max step ")
-        self._deadband = QtWidgets.QDoubleSpinBox(); self._deadband.setValue(self._config.command_deadband_um); self._deadband.setPrefix("Deadband ")
-        for w in [self._kp, self._ki, self._kd, self._max_speed, self._max_step, self._deadband]:
-            controls.addWidget(w)
-
-        self._track_roi_xy = QtWidgets.QCheckBox("Track ROI in XY")
-        self._track_roi_xy.setChecked(bool(self._config.track_roi))
-        self._track_gain = QtWidgets.QDoubleSpinBox(); self._track_gain.setRange(0.0, 1.0); self._track_gain.setSingleStep(0.05); self._track_gain.setValue(float(self._config.track_gain)); self._track_gain.setPrefix("Track gain ")
-        self._track_deadband_px = QtWidgets.QDoubleSpinBox(); self._track_deadband_px.setRange(0.0, 50.0); self._track_deadband_px.setValue(float(self._config.track_deadband_px)); self._track_deadband_px.setPrefix("Track deadband px ")
-        self._track_max_step_px = QtWidgets.QDoubleSpinBox(); self._track_max_step_px.setRange(0.5, 100.0); self._track_max_step_px.setValue(float(self._config.track_max_shift_px)); self._track_max_step_px.setPrefix("Track max step px ")
-
-        self._autoscale_btn = QtWidgets.QPushButton("Autoscale")
-        self._level_min_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal); self._level_min_slider.setRange(0, 1000); self._level_min_slider.setValue(0)
-        self._level_max_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal); self._level_max_slider.setRange(0, 1000); self._level_max_slider.setValue(1000)
-        self._gamma_spin = QtWidgets.QDoubleSpinBox(); self._gamma_spin.setRange(0.2, 4.0); self._gamma_spin.setSingleStep(0.05); self._gamma_spin.setValue(1.0); self._gamma_spin.setPrefix("Gamma ")
-
-        controls.addWidget(self._track_roi_xy)
-        controls.addWidget(self._track_gain)
-        controls.addWidget(self._track_deadband_px)
-        controls.addWidget(self._track_max_step_px)
-        self._detection_window = QtWidgets.QSpinBox(); self._detection_window.setRange(3, 30); self._detection_window.setValue(int(self._config.detection_window_size)); self._detection_window.setPrefix("Det. window ")
-        self._detection_threshold = QtWidgets.QDoubleSpinBox(); self._detection_threshold.setRange(0.1, 1.0); self._detection_threshold.setSingleStep(0.05); self._detection_threshold.setValue(float(self._config.detection_pass_threshold)); self._detection_threshold.setPrefix("Det. threshold ")
-        self._use_gaussian = QtWidgets.QCheckBox("Per-frame Gaussian fit"); self._use_gaussian.setChecked(bool(self._config.use_gaussian_fit))
-        controls.addWidget(self._detection_window)
-        controls.addWidget(self._detection_threshold)
-        controls.addWidget(self._use_gaussian)
-        controls.addWidget(self._autoscale_btn)
-        controls.addWidget(QtWidgets.QLabel("Min level"))
-        controls.addWidget(self._level_min_slider)
-        controls.addWidget(QtWidgets.QLabel("Max level"))
-        controls.addWidget(self._level_max_slider)
-        controls.addWidget(self._gamma_spin)
-
+        display_page = QtWidgets.QWidget()
+        display_layout = QtWidgets.QVBoxLayout(display_page)
+        display_layout.setContentsMargins(10, 10, 10, 10)
+        display_layout.setSpacing(10)
+        self._autoscale_btn = QtWidgets.QPushButton("Autoscale image")
         self._rotation = QtWidgets.QComboBox()
         self._rotation.addItems(["Rotate 0 deg", "Rotate 90 deg", "Rotate 180 deg", "Rotate 270 deg"])
         self._flip_h = QtWidgets.QCheckBox("Flip horizontal")
         self._flip_v = QtWidgets.QCheckBox("Flip vertical")
-        controls.addWidget(self._rotation)
-        controls.addWidget(self._flip_h)
-        controls.addWidget(self._flip_v)
+        self._level_min_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal); self._level_min_slider.setRange(0, 1000); self._level_min_slider.setValue(0)
+        self._level_max_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal); self._level_max_slider.setRange(0, 1000); self._level_max_slider.setValue(1000)
+        self._gamma_spin = QtWidgets.QDoubleSpinBox(); self._gamma_spin.setRange(0.2, 4.0); self._gamma_spin.setSingleStep(0.05); self._gamma_spin.setValue(1.0); self._gamma_spin.setPrefix("Gamma  ")
+        display_layout.addWidget(self._autoscale_btn)
+        display_layout.addWidget(QtWidgets.QLabel("Display minimum"))
+        display_layout.addWidget(self._level_min_slider)
+        display_layout.addWidget(QtWidgets.QLabel("Display maximum"))
+        display_layout.addWidget(self._level_max_slider)
+        display_layout.addWidget(self._gamma_spin)
+        display_layout.addWidget(self._rotation)
+        display_layout.addWidget(self._flip_h)
+        display_layout.addWidget(self._flip_v)
+        display_layout.addStretch(1)
+        self._sections.addItem(display_page, "Display")
 
-        top.addLayout(controls, 1)
+        right_layout.addStretch(1)
+        right_scroll.setWidget(right_body)
+        top.addWidget(right_scroll)
+        top.setStretchFactor(0, 8)
+        top.setStretchFactor(1, 5)
 
-        self._plot = pg.PlotWidget(title="Diagnostics (10s)")
-        self._plot.addLegend()
-        self._z_curve = self._plot.plot(pen='y', name='Z')
-        self._e_curve = self._plot.plot(pen='c', name='Error')
-        self._c_curve = self._plot.plot(pen='m', name='Correction')
-        self._ell_curve = self._plot.plot(pen='g', name='Ellipticity')
-        layout.addWidget(self._plot, 1)
+        diag_card, diag_layout = self._make_card("Diagnostics", "Live control behavior over the most recent 10 seconds.")
+        self._plot = pg.PlotWidget(title="Lock Diagnostics")
+        self._style_plot(self._plot, x_label="Time (s)", y_label="Signal")
+        self._add_plot_legend(self._plot)
+        self._diag_zero = pg.InfiniteLine(angle=0, pen=pg.mkPen(UI_THEME["dim"], style=QtCore.Qt.DashLine))
+        self._plot.addItem(self._diag_zero)
+        self._diag_safe_band = pg.LinearRegionItem(values=[-0.01, 0.01], orientation='horizontal', movable=False, brush=pg.mkBrush(78, 205, 196, 36), pen=pg.mkPen(None))
+        self._plot.addItem(self._diag_safe_band)
+        self._z_curve = self._plot.plot(pen=pg.mkPen(UI_THEME["yellow"], width=2), name='Z command')
+        self._e_curve = self._plot.plot(pen=pg.mkPen(UI_THEME["cyan"], width=2), name='Error (um)')
+        self._c_curve = self._plot.plot(pen=pg.mkPen(UI_THEME["magenta"], width=2), name='Correction')
+        self._ell_curve = self._plot.plot(pen=pg.mkPen(UI_THEME["focus"], width=2), name='Ellipticity')
+        diag_layout.addWidget(self._plot)
+        bottom.addWidget(diag_card)
 
-        self._cal_plot = pg.PlotWidget(title="Calibration curve (z vs error)")
-        self._cal_plot.addLegend()
-        self._cal_pts = self._cal_plot.plot(pen=None, symbol='o', symbolSize=6, symbolBrush=(255, 193, 7), name='Samples')
-        self._cal_pts_rev = self._cal_plot.plot(pen=None, symbol='t', symbolSize=6, symbolBrush=(100, 181, 246), name='Reverse sweep')
-        self._cal_fit = self._cal_plot.plot(pen=pg.mkPen('g', width=2), name='Fit')
-        self._cal_current_z = pg.InfiniteLine(angle=0, pen=pg.mkPen('r', width=1, style=QtCore.Qt.DashLine))
+        cal_card, cal_layout = self._make_card("Calibration", "Accepted samples and model fit from the most recent sweep.")
+        summary_row = QtWidgets.QGridLayout()
+        summary_row.setHorizontalSpacing(10)
+        summary_row.setVerticalSpacing(8)
+        q_tile, self._cal_quality_val, self._cal_quality_meta = self._make_metric_tile("Fit Quality", "--", "awaiting sweep")
+        range_tile, self._cal_range_val, self._cal_range_meta = self._make_metric_tile("Usable Range", "--", "focus-relative")
+        fall_tile, self._cal_fallback_val, self._cal_fallback_meta = self._make_metric_tile("Fallback Fraction", "--", "rejected from model")
+        accept_tile, self._cal_accept_val, self._cal_accept_meta = self._make_metric_tile("Calibration", "--", "status")
+        summary_row.addWidget(q_tile, 0, 0)
+        summary_row.addWidget(range_tile, 0, 1)
+        summary_row.addWidget(fall_tile, 1, 0)
+        summary_row.addWidget(accept_tile, 1, 1)
+        cal_layout.addLayout(summary_row)
+
+        self._cal_plot = pg.PlotWidget(title="Calibration Curve")
+        self._style_plot(self._cal_plot, x_label="Error signal", y_label="Z offset (um)")
+        self._add_plot_legend(self._cal_plot)
+        self._cal_pts = self._cal_plot.plot(pen=None, symbol='o', symbolSize=7, symbolBrush=(255, 211, 105, 220), symbolPen=pg.mkPen(UI_THEME["yellow"]), name='Forward sweep')
+        self._cal_pts_rev = self._cal_plot.plot(pen=None, symbol='t', symbolSize=7, symbolBrush=(110, 197, 255, 210), symbolPen=pg.mkPen(UI_THEME["cyan"]), name='Reverse sweep')
+        self._cal_fit = self._cal_plot.plot(pen=pg.mkPen(UI_THEME["ok"], width=3), name='Model fit')
+        self._cal_current_z = pg.InfiniteLine(angle=0, pen=pg.mkPen(UI_THEME["fault"], width=1, style=QtCore.Qt.DashLine))
         self._cal_plot.addItem(self._cal_current_z)
-        layout.addWidget(self._cal_plot, 1)
+        self._cal_usable_band = pg.LinearRegionItem(values=[-0.1, 0.1], orientation='horizontal', movable=False, brush=pg.mkBrush(107, 207, 138, 36), pen=pg.mkPen(None))
+        self._cal_plot.addItem(self._cal_usable_band)
+        cal_layout.addWidget(self._cal_plot, 2)
 
-        self._ell_plot = pg.PlotWidget(title="Ellipticity classes (z vs sigma_x/sigma_y)")
-        self._ell_plot.addLegend()
+        self._ell_plot = pg.PlotWidget(title="Ellipticity Classes")
+        self._style_plot(self._ell_plot, x_label="Z offset (um)", y_label="Ellipticity")
+        self._add_plot_legend(self._ell_plot)
         self._ell_param = self._ell_plot.plot(
             pen=None,
             symbol='o',
-            symbolSize=6,
-            symbolBrush=(76, 175, 80),
-            name='Parametric fit',
+            symbolSize=7,
+            symbolBrush=(107, 207, 138, 210),
+            symbolPen=pg.mkPen(UI_THEME["ok"]),
+            name='Accepted for model',
         )
         self._ell_fallback = self._ell_plot.plot(
             pen=None,
             symbol='x',
             symbolSize=7,
-            symbolBrush=(158, 158, 158),
-            name='Moment fallback',
+            symbolBrush=(120, 128, 138, 120),
+            symbolPen=pg.mkPen((120, 128, 138, 180)),
+            name='Rejected / fallback',
         )
-        self._ell_plot.addItem(pg.InfiniteLine(angle=0, pos=1.0, pen=pg.mkPen((255, 255, 255, 100), style=QtCore.Qt.DashLine)))
-        layout.addWidget(self._ell_plot, 1)
+        self._ell_plot.addItem(pg.InfiniteLine(angle=0, pos=1.0, pen=pg.mkPen((255, 255, 255, 80), style=QtCore.Qt.DashLine)))
+        self._ell_usable_band = pg.LinearRegionItem(values=[-0.1, 0.1], movable=False, brush=pg.mkBrush(107, 207, 138, 28), pen=pg.mkPen(None))
+        self._ell_plot.addItem(self._ell_usable_band)
+        cal_layout.addWidget(self._ell_plot, 2)
+        bottom.addWidget(cal_card)
+
+        event_card, event_layout = self._make_card("Event Feed", "Recent state transitions, faults, and operator-visible messages.")
+        self._events = QtWidgets.QListWidget()
+        self._events.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self._events.setAlternatingRowColors(False)
+        event_layout.addWidget(self._events)
+        bottom.addWidget(event_card)
+        bottom.setStretchFactor(0, 5)
+        bottom.setStretchFactor(1, 6)
+        bottom.setStretchFactor(2, 3)
+        self._set_state_card(AutofocusState.CALIBRATED_READY.value, "Calibration loaded. Ready to acquire lock.")
+        self._push_event("Instrument panel ready", level="state")
 
     def _connect_signals(self) -> None:
         self._signals.frame_ready.connect(self._on_frame)
@@ -512,8 +952,36 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
         self._level_min_slider.valueChanged.connect(self._on_level_slider_changed)
         self._level_max_slider.valueChanged.connect(self._on_level_slider_changed)
         self._gamma_spin.valueChanged.connect(self._on_gamma_changed)
-        self._cal_half_range.valueChanged.connect(lambda _v: self._save_settings())
-        self._cal_steps.valueChanged.connect(lambda _v: self._save_settings())
+        for signal in [
+            self._kp.valueChanged,
+            self._ki.valueChanged,
+            self._kd.valueChanged,
+            self._max_step.valueChanged,
+            self._deadband.valueChanged,
+            self._max_speed.valueChanged,
+            self._track_gain.valueChanged,
+            self._track_deadband_px.valueChanged,
+            self._track_max_step_px.valueChanged,
+            self._detection_window.valueChanged,
+            self._detection_threshold.valueChanged,
+            self._rotation.currentIndexChanged,
+            self._level_min_slider.valueChanged,
+            self._level_max_slider.valueChanged,
+            self._gamma_spin.valueChanged,
+            self._cal_half_range.valueChanged,
+            self._cal_steps.valueChanged,
+        ]:
+            signal.connect(lambda *_args: self._save_settings())
+        for signal in [
+            self._lock_setpoint.toggled,
+            self._track_roi_xy.toggled,
+            self._use_gaussian.toggled,
+            self._flip_h.toggled,
+            self._flip_v.toggled,
+            self._show_trail.toggled,
+            self._show_centroid.toggled,
+        ]:
+            signal.connect(lambda *_args: self._save_settings())
 
     def _on_transform_changed(self, *_args) -> None:
         rotation = int(self._rotation.currentIndex()) * 90
@@ -549,6 +1017,8 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
             "rotation_index": int(self._rotation.currentIndex()),
             "flip_h": bool(self._flip_h.isChecked()),
             "flip_v": bool(self._flip_v.isChecked()),
+            "show_trail": bool(self._show_trail.isChecked()),
+            "show_centroid": bool(self._show_centroid.isChecked()),
             "cal_half_range_um": float(self._cal_half_range.value()),
             "cal_steps": int(self._cal_steps.value()),
         }
@@ -598,6 +1068,8 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
             self._rotation.setCurrentIndex(int(data["rotation_index"]))
         self._flip_h.setChecked(bool(data.get("flip_h", False)))
         self._flip_v.setChecked(bool(data.get("flip_v", False)))
+        self._show_trail.setChecked(bool(data.get("show_trail", True)))
+        self._show_centroid.setChecked(bool(data.get("show_centroid", True)))
         if "roi" in data and isinstance(data["roi"], list) and len(data["roi"]) == 4:
             x, y, w, h = [int(v) for v in data["roi"]]
             self._roi.setPos([x, y])
@@ -701,6 +1173,21 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
                 autoLevels=False,
                 levels=(self._display_level_min, self._display_level_max),
             )
+            h, w = arr.shape
+            self._overlay_info.setPos(6, 6)
+            self._overlay_legend.setPos(max(10, w - 6), 6)
+            self._overlay_legend.setHtml(
+                "<div style='color:{text}; font-size:11px;'>"
+                "<span style='color:{focus};'>ROI</span>  "
+                "<span style='color:{cyan};'>trail</span>  "
+                "<span style='color:{ok};'>centroid</span>"
+                "</div>".format(
+                    text=UI_THEME["text"],
+                    focus=UI_THEME["focus"],
+                    cyan=UI_THEME["cyan"],
+                    ok=UI_THEME["ok"],
+                )
+            )
         except Exception as exc:
             self._signals.fault.emit(f"Display failure: {exc}")
 
@@ -723,28 +1210,66 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
         self._history_state.append(str(getattr(sample, "state", "")))
         self._last_cmd = sample.commanded_z_um
 
-        self._z_lbl.setText(f"Z: {sample.commanded_z_um:+.3f} um")
-        self._corr_lbl.setText(f"Last correction: {corr*1000.0:+.1f} nm")
-        self._lat_lbl.setText(f"Loop latency: {sample.loop_latency_ms:.1f} ms")
-        self._conf_lbl.setText(f"Detection: {getattr(sample, 'detection_pass_rate', 1.0):.0%} ell={getattr(sample, 'ellipticity', 0.0):.3f} R²={getattr(sample, 'fit_r_squared', 0.0):.2f}")
-        self._domain_lbl.setText(
-            f"Domain margin: {getattr(sample, 'domain_margin', 0.0):+0.4f} "
-            "(negative means outside)"
-        )
-        self._health_lbl.setText(
-            f"Control scale: {getattr(sample, 'confidence_scale', 1.0):0.2f} "
-            f"Stage lag: {getattr(sample, 'stage_lag_um', 0.0):0.3f} um"
-        )
-        self._drop_lbl.setText(f"Frames dropped: {self._stats.dropped_frames}")
+        conf = float(getattr(sample, "confidence_scale", 1.0))
+        detect = float(getattr(sample, "detection_pass_rate", 1.0))
+        lock_quality = int(max(0.0, min(100.0, 100.0 * conf * detect)))
+        self._lock_quality.setValue(lock_quality)
+        self._lock_quality_lbl.setText(f"Lock quality {lock_quality}%   pass {detect:0.0%}")
+
+        self._z_val.setText(f"{sample.commanded_z_um:+.3f}")
+        self._z_meta.setText(f"commanded  stage {sample.stage_z_um:+.3f} um")
+        self._err_val.setText(f"{sample.error_um:+.4f}")
+        self._err_meta.setText(f"raw {sample.error:+.4f}   ell {getattr(sample, 'ellipticity', 0.0):.3f}")
+        self._corr_val.setText(f"{corr * 1000.0:+.1f} nm")
+        self._corr_meta.setText(f"loop latency {sample.loop_latency_ms:.1f} ms")
+        self._conf_val.setText(f"{detect:0.0%}")
+        self._conf_meta.setText(f"R² {getattr(sample, 'fit_r_squared', 0.0):.2f}   scale {conf:0.2f}")
+        self._domain_val.setText(f"{getattr(sample, 'domain_margin', 0.0):+0.4f}")
+        self._domain_meta.setText("negative means outside calibration")
+        self._lag_val.setText(f"{getattr(sample, 'stage_lag_um', 0.0):0.3f} um")
+        self._lag_meta.setText(f"dropped {self._stats.dropped_frames} frames")
         self._status.setText(f"I={sample.roi_total_intensity:.0f} err={sample.error:+.4f} - {sample.diagnostic}")
         self._roi.blockSignals(True)
         self._roi.setPos((sample.roi.x, sample.roi.y), update=True)
         self._roi.setSize((sample.roi.width, sample.roi.height), update=True)
         self._roi.blockSignals(False)
         if sample.confidence_ok:
-            self._roi.setPen(pg.mkPen('c', width=2))
+            self._roi.setPen(pg.mkPen(UI_THEME["focus"], width=2))
         else:
-            self._roi.setPen(pg.mkPen('r', width=2))
+            self._roi.setPen(pg.mkPen(UI_THEME["fault"], width=2))
+
+        cx = sample.roi.x + (sample.roi.width / 2.0)
+        cy = sample.roi.y + (sample.roi.height / 2.0)
+        if self._show_centroid.isChecked():
+            self._centroid_marker.setData([cx], [cy])
+        else:
+            self._centroid_marker.setData([], [])
+
+        if not hasattr(self, "_trail_points"):
+            self._trail_points = deque(maxlen=80)
+        self._trail_points.append((cx, cy))
+        if self._show_trail.isChecked():
+            xs = [p[0] for p in self._trail_points]
+            ys = [p[1] for p in self._trail_points]
+            self._trail_curve.setData(xs, ys)
+        else:
+            self._trail_curve.setData([], [])
+
+        self._overlay_info.setHtml(
+            "<div style='color:{text}; font-size:12px;'>"
+            "<b>Live fit</b><br>"
+            "I {intensity:.0f}<br>"
+            "ell {ell:.3f}<br>"
+            "fwhm {fwhm:.2f}px<br>"
+            "R² {r2:.2f}"
+            "</div>".format(
+                text=UI_THEME["text"],
+                intensity=sample.roi_total_intensity,
+                ell=getattr(sample, "ellipticity", 0.0),
+                fwhm=getattr(sample, "fwhm_px", 0.0),
+                r2=getattr(sample, "fit_r_squared", 0.0),
+            )
+        )
         self._update_plot()
 
     def _update_plot(self) -> None:
@@ -756,6 +1281,9 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
         self._e_curve.setData(xs, list(self._history_err))
         self._c_curve.setData(xs, list(self._history_corr))
         self._ell_curve.setData(xs, list(self._history_ell))
+        self._plot.setXRange(-10.0, 0.0, padding=0.02)
+        deadband = max(0.001, float(self._deadband.value()))
+        self._diag_safe_band.setRegion((-deadband, deadband))
 
 
     def _event_log_path(self) -> Path:
@@ -771,18 +1299,18 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
 
     @Slot(str)
     def _on_state(self, state: str) -> None:
-        colors = {
-            AutofocusState.IDLE.value: '#455a64',
-            AutofocusState.CALIBRATED_READY.value: '#1565c0',
-            AutofocusState.LOCKING.value: '#2e7d32',
-            AutofocusState.LOCKED.value: '#1b5e20',
-            AutofocusState.DEGRADED.value: '#f9a825',
-            AutofocusState.RECOVERY.value: '#ef6c00',
-            AutofocusState.LOST.value: '#6a1b9a',
-            AutofocusState.FAULT.value: '#b71c1c',
-        }
-        self._state_badge.setText(state)
-        self._state_badge.setStyleSheet(f"background:{colors.get(state, '#444')};color:white;padding:4px;font-weight:bold;")
+        detail = {
+            AutofocusState.IDLE.value: "Loop stopped. Image and ROI remain live.",
+            AutofocusState.CALIBRATED_READY.value: "Calibration accepted. Lock can be armed safely.",
+            AutofocusState.LOCKING.value: "Good frames are accumulating and control authority is ramping in.",
+            AutofocusState.LOCKED.value: "Closed-loop corrections are stable and within the deadband.",
+            AutofocusState.DEGRADED.value: "Measurements are still arriving, but trust is reduced.",
+            AutofocusState.RECOVERY.value: "Guardrails are holding control while the target is re-evaluated.",
+            AutofocusState.LOST.value: "Target confidence collapsed. Re-select the ROI.",
+            AutofocusState.FAULT.value: "Operator attention required. Inspect diagnostics and status messages.",
+        }.get(state, "Autofocus state updated.")
+        self._set_state_card(state, detail)
+        self._push_event(f"State -> {state}", level="state")
 
         now = time.monotonic()
         if state == AutofocusState.RECOVERY.value:
@@ -800,11 +1328,14 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
     @Slot(str)
     def _on_fault(self, message: str) -> None:
         self._status.setText(message)
+        self._push_event(message, level="fault")
         self._on_state(AutofocusState.FAULT.value)
 
     @Slot(str)
     def _on_status(self, message: str) -> None:
         self._status.setText(message)
+        level = "warn" if ("warning" in message.lower() or "failed" in message.lower()) else "info"
+        self._push_event(message, level=level)
 
     def _on_lock_setpoint(self, enabled: bool) -> None:
         self._queue_config_update(lock_setpoint=bool(enabled))
@@ -1144,6 +1675,14 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
                             "y_rev": ys0[split0:].tolist(),
                             "x_fit": x_fit0.tolist(),
                             "y_fit": y_fit0.tolist(),
+                            "quality_text": "Preview only",
+                            "quality_meta": "retry decision required",
+                            "range_text": "--",
+                            "range_meta": "sweep not accepted",
+                            "fallback_text": "--",
+                            "fallback_meta": "preview",
+                            "accept_text": "REVIEW",
+                            "accept_meta": "confirm retry or keep current fit",
                         })
                     except Exception:
                         pass
@@ -1205,6 +1744,28 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
                     current_z = float(self._stage.get_z_um())
                     current_z_rel = current_z - y_ref
                     usable = getattr(z_report, "usable_range_um", None) if z_report is not None else None
+                    n_param = int(np.isfinite(r2_vals).sum())
+                    n_fallback = int((~np.isfinite(r2_vals)).sum())
+                    total_samples = max(1, len(samples))
+                    fallback_fraction = float(n_fallback) / float(total_samples)
+                    if z_report is not None:
+                        quality_text = f"R²x {z_report.r2_x:.3f} / R²y {z_report.r2_y:.3f}"
+                        quality_meta = "parametric axis fit quality"
+                        accept_text = "ACCEPT"
+                        accept_meta = "calibration armed"
+                    else:
+                        quality_text = "Linear fallback"
+                        quality_meta = "parametric fit unavailable"
+                        accept_text = "LIMITED"
+                        accept_meta = "fallback calibration only"
+                    if usable is not None:
+                        range_text = f"{float(usable[0]):+.3f} to {float(usable[1]):+.3f} um"
+                        range_meta = "usable Z range"
+                    else:
+                        z_min = float(np.min(z_rel))
+                        z_max = float(np.max(z_rel))
+                        range_text = f"{z_min:+.3f} to {z_max:+.3f} um"
+                        range_meta = "swept Z range"
                     self._signals.calibration_plot.emit({
                         "x": xs[:split].tolist(),
                         "y": ys[:split].tolist(),
@@ -1218,10 +1779,16 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
                         "ell_param": ell_vals[np.isfinite(r2_vals)].tolist(),
                         "ell_z_fallback": z_rel[~np.isfinite(r2_vals)].tolist(),
                         "ell_fallback": ell_vals[~np.isfinite(r2_vals)].tolist(),
+                        "quality_text": quality_text,
+                        "quality_meta": quality_meta,
+                        "range_text": range_text,
+                        "range_meta": range_meta,
+                        "fallback_text": f"{fallback_fraction:0.0%}",
+                        "fallback_meta": f"{n_fallback} fallback of {total_samples} samples",
+                        "accept_text": accept_text,
+                        "accept_meta": accept_meta,
                     })
                     if z_report is not None:
-                        n_param = int(np.isfinite(r2_vals).sum())
-                        n_fallback = int((~np.isfinite(r2_vals)).sum())
                         self._signals.status.emit(
                             f"Calibration quality: R²x={z_report.r2_x:.3f}, R²y={z_report.r2_y:.3f}, usable={z_report.usable_range_um}"
                         )
@@ -1323,7 +1890,8 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
     def _on_calibration_running(self, running: bool) -> None:
         self._cal_btn.setEnabled(not running)
         self._cal_btn.setText("Calibrating..." if running else "Calibrate")
-        self._cal_progress.setText("Calibration: running..." if running else "Calibration: idle")
+        self._cal_progress.setText("Calibration running..." if running else "Calibration idle")
+        self._push_event("Calibration started" if running else "Calibration stopped", level="state")
 
     @Slot(object)
     def _on_calibration_plot(self, payload: object) -> None:
@@ -1338,6 +1906,33 @@ class AutofocusMainWindow(QtWidgets.QMainWindow):
             self._cal_current_z.setValue(float(payload.get("current_z_rel", 0.0)))
         except Exception:
             pass
+        usable = payload.get("usable", None)
+        if isinstance(usable, (list, tuple)) and len(usable) == 2:
+            try:
+                lo = float(usable[0]); hi = float(usable[1])
+                self._cal_usable_band.setRegion((lo, hi))
+                self._ell_usable_band.setRegion((lo, hi))
+            except Exception:
+                pass
+        self._cal_quality_val.setText(str(payload.get("quality_text", "--")))
+        self._cal_quality_meta.setText(str(payload.get("quality_meta", "awaiting sweep")))
+        self._cal_range_val.setText(str(payload.get("range_text", "--")))
+        self._cal_range_meta.setText(str(payload.get("range_meta", "focus-relative")))
+        self._cal_fallback_val.setText(str(payload.get("fallback_text", "--")))
+        self._cal_fallback_meta.setText(str(payload.get("fallback_meta", "rejected from model")))
+        self._cal_accept_val.setText(str(payload.get("accept_text", "--")))
+        self._cal_accept_meta.setText(str(payload.get("accept_meta", "status")))
+        accept_text = str(payload.get("accept_text", "--")).upper()
+        accept_color = UI_THEME["text"]
+        if "ACCEPT" in accept_text:
+            accept_color = UI_THEME["ok"]
+        elif "LIMIT" in accept_text:
+            accept_color = UI_THEME["warn"]
+        elif "REJECT" in accept_text or "FAIL" in accept_text:
+            accept_color = UI_THEME["fault"]
+        self._cal_accept_val.setStyleSheet(
+            f"color: {accept_color}; font-size: 24px; font-weight: 700; font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;"
+        )
 
     @Slot(str)
     def _on_calibration_retry_prompt(self, message: str) -> None:
