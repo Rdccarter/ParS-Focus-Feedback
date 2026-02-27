@@ -276,7 +276,7 @@ def test_analytical_zhuang_correction_uses_findz_sign_directly(monkeypatch):
     assert stage.moves[-1] < 0.0
 
 
-def test_strict_lenstra_analytical_bypasses_error_domain_gate(monkeypatch):
+def test_strict_analytical_bypasses_error_domain_gate(monkeypatch):
     class DummyFit:
         x = 0.0
         y = 0.0
@@ -301,7 +301,7 @@ def test_strict_lenstra_analytical_bypasses_error_domain_gate(monkeypatch):
     cfg = _config()
     cfg.use_gaussian_fit = True
     cfg.use_analytical_inversion = True
-    cfg.strict_lenstra_match = True
+    cfg.strict_analytical_match = True
 
     controller = AstigmaticAutofocusController(DummyCamera(), DummyStage(), cfg, DummyZhuangCal())
     sample = controller.run_step()
@@ -335,7 +335,7 @@ def test_non_strict_mode_keeps_domain_guard_for_analytical_path(monkeypatch):
     cfg = _config()
     cfg.use_gaussian_fit = True
     cfg.use_analytical_inversion = True
-    cfg.strict_lenstra_match = False
+    cfg.strict_analytical_match = False
 
     controller = AstigmaticAutofocusController(DummyCamera(), DummyStage(), cfg, DummyZhuangCal())
     sample = controller.run_step()
